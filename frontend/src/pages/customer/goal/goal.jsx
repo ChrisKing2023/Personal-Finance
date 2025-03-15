@@ -1,99 +1,168 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 const Goal = () => {
-  const [goals, setGoals] = useState([]);
   const [totalSavings, setTotalSavings] = useState(0);
+  const [currency, setCurrency] = useState(
+    localStorage.getItem("currency") || "USD"
+  );
+  const [goals, setGoals] = useState([]);
+  const [newGoal, setNewGoal] = useState({
+    title: "",
+    image: "",
+    targetValue: "",
+    description: "",
+  });
 
   useEffect(() => {
-    const fetchGoals = async () => {
-      try {
-        const response = await axios.get("http://localhost:5000/api/goal");
-        setGoals(response.data.goals);
-        setTotalSavings(response.data.totalSavings);
-      } catch (error) {
-        console.error("Error fetching goals:", error);
-      }
-    };
+    fetchTotalSavings();
     fetchGoals();
   }, []);
 
-  const deleteGoal = async (goalId) => {
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      toast.error("Authentication token is missing.");
+      throw new Error("Authentication token is missing.");
+    }
+    return { Authorization: `Bearer ${token}` };
+  };
+
+  const fetchTotalSavings = async () => {
     try {
-      await axios.delete(`http://localhost:5000/api/goal/${goalId}`);
-      setGoals(goals.filter((goal) => goal._id !== goalId));
+      const { data } = await axios.get(
+        "http://localhost:5000/api/goal/total-savings",
+        { headers: getAuthHeaders() }
+      );
+      setTotalSavings(data.totalSavings);
+      setCurrency(data.currency);
     } catch (error) {
-      console.error("Error deleting goal:", error);
+      toast.error("Failed to fetch total savings");
+      console.error("Error fetching total savings", error);
     }
   };
 
-  const completeGoal = async (goalId) => {
+  const fetchGoals = async () => {
     try {
-      await axios.patch(`http://localhost:5000/api/goal/complete/${goalId}`);
-      setGoals(
-        goals.map((goal) =>
-          goal._id === goalId ? { ...goal, isCompleted: true } : goal
-        )
-      );
+      const { data } = await axios.get("http://localhost:5000/api/goal/", {
+        headers: getAuthHeaders(),
+      });
+      setGoals(data.goals);
     } catch (error) {
-      console.error("Error completing goal:", error);
+      toast.error("Failed to fetch goals");
+      console.error("Error fetching goals", error);
+    }
+  };
+
+  const handleCreateGoal = async () => {
+    try {
+      const { data } = await axios.post(
+        "http://localhost:5000/api/goal/",
+        newGoal,
+        { headers: getAuthHeaders() }
+      );
+      setGoals([...goals, data.goal]);
+      toast.success(`Goal "${data.goal.title}" created successfully!`);
+      setNewGoal({ title: "", image: "", targetValue: "", description: "" });
+    } catch (error) {
+      toast.error("Failed to create goal");
+      console.error("Error creating goal", error);
+    }
+  };
+
+  const handleDeleteGoal = async (goalId) => {
+    try {
+      await axios.delete(`http://localhost:5000/api/goal/${goalId}`, {
+        headers: getAuthHeaders(),
+      });
+      setGoals(goals.filter((goal) => goal._id !== goalId));
+      toast.success("Goal deleted successfully!");
+    } catch (error) {
+      toast.error("Failed to delete goal");
+      console.error("Error deleting goal", error);
     }
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-semibold text-gray-900">My Goals</h1>
-        <p className="text-lg text-gray-500">Total Savings: ${totalSavings}</p>
+    <div className="container mx-auto p-6">
+      <ToastContainer />
+      <h1 className="text-2xl font-bold mb-4">Goal Management</h1>
+
+      {/* Total Savings */}
+      <div className="bg-gray-100 p-4 rounded-lg shadow-md mb-6">
+        <h2 className="text-xl font-semibold">Total Savings</h2>
+        <p className="text-lg font-bold">
+          {currency} {totalSavings}
+        </p>
       </div>
-      <div className="space-y-6">
-        {goals.length === 0 ? (
-          <p className="text-xl text-gray-500">No goals found.</p>
-        ) : (
-          goals.map((goal) => (
-            <div
-              key={goal._id}
-              className="bg-white shadow-md rounded-lg p-6 flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-6"
-            >
-              <img
-                src={goal.image || "https://via.placeholder.com/150"}
-                alt={goal.title}
-                className="w-32 h-32 rounded-md object-cover"
-              />
-              <div className="flex-1">
-                <h2 className="text-xl font-medium text-gray-800">
-                  {goal.title}
-                </h2>
-                <p className="text-gray-500 mt-2">
-                  {goal.description || "No description available."}
-                </p>
-                <p className="mt-2 text-gray-800">
-                  Target: ${goal.targetValue} | Saved: ${goal.savedValue} |
-                  Remaining: ${goal.remainingAmount}
-                </p>
-                <div className="mt-4 flex space-x-4">
-                  <button
-                    onClick={() => completeGoal(goal._id)}
-                    disabled={goal.isCompleted}
-                    className={`px-4 py-2 rounded-md ${
-                      goal.isCompleted
-                        ? "bg-green-500 text-white cursor-not-allowed"
-                        : "bg-blue-500 text-white"
-                    }`}
-                  >
-                    {goal.isCompleted ? "Completed" : "Mark as Completed"}
-                  </button>
-                  <button
-                    onClick={() => deleteGoal(goal._id)}
-                    className="px-4 py-2 rounded-md bg-red-500 text-white"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))
-        )}
+
+      {/* Create Goal */}
+      <div className="bg-white p-4 rounded-lg shadow-md mb-6">
+        <h2 className="text-xl font-semibold mb-2">Create a Goal</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Input
+            placeholder="Title"
+            value={newGoal.title}
+            onChange={(e) => setNewGoal({ ...newGoal, title: e.target.value })}
+          />
+          <Input
+            placeholder="Image URL"
+            value={newGoal.image}
+            onChange={(e) => setNewGoal({ ...newGoal, image: e.target.value })}
+          />
+          <Input
+            placeholder="Target Value"
+            type="number"
+            value={newGoal.targetValue}
+            onChange={(e) =>
+              setNewGoal({ ...newGoal, targetValue: e.target.value })
+            }
+          />
+          <Input
+            placeholder="Description"
+            value={newGoal.description}
+            onChange={(e) =>
+              setNewGoal({ ...newGoal, description: e.target.value })
+            }
+          />
+        </div>
+        <Button className="mt-4 w-full" onClick={handleCreateGoal}>
+          Create Goal
+        </Button>
+      </div>
+
+      {/* Goals List */}
+      <h2 className="text-xl font-semibold mb-4">Your Goals</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {goals.map((goal) => (
+          <Card key={goal._id} className="p-4">
+            <CardContent>
+              {goal.image && (
+                <img
+                  src={goal.image}
+                  alt={goal.title}
+                  className="w-full h-32 object-cover rounded-lg mb-2"
+                />
+              )}
+              <h3 className="text-lg font-bold">{goal.title}</h3>
+              <p className="text-gray-600">{goal.description}</p>
+              <p className="mt-2 font-semibold">
+                {goal.currency} {goal.savedValue} / {goal.targetValue}
+              </p>
+              <Button
+                className="mt-4 bg-red-500 hover:bg-red-600"
+                onClick={() => handleDeleteGoal(goal._id)}
+              >
+                Delete
+              </Button>
+            </CardContent>
+          </Card>
+        ))}
       </div>
     </div>
   );
